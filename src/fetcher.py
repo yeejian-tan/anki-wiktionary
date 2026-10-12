@@ -129,7 +129,8 @@ class WiktionaryFetcher:
         rows = self._connection.execute("SELECT data FROM words WHERE word = ? ORDER BY rowid", (word,)).fetchall()
         if not rows:
             raise WordNotFoundError(word)
-        return [json.loads(row[0]) for row in rows]
+        # Dictionaries imported more than once by older versions contain identical rows
+        return [json.loads(data) for data in dict.fromkeys(row[0] for row in rows)]
 
     def get_word_json(self, word: str, index: int = 0) -> dict:
         entries = self.get_entries(word)
