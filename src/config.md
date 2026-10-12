@@ -3,3 +3,4 @@
 - `report_errors`: Report add-on errors automatically.
 - The other options ending with \*\_field are used to save your configured fields.
 - `mappings`: Field mappings cached per notetype (keyed by notetype ID).
+- `choose_entry`: Ask which entry to use when a word has several (e.g. different parts of speech). If disabled, the first entry is used.

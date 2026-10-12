@@ -8,6 +8,9 @@
         }
     },
     "properties": {
+        "choose_entry": {
+            "type": "boolean"
+        },
         "mappings": {
             "type": "object"
         },

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from typing import Any, Callable
 from urllib.parse import unquote
@@ -15,7 +16,7 @@ except ImportError:
 from anki.notes import Note
 from aqt.main import AnkiQt
 from aqt.operations import QueryOp
-from aqt.qt import QDialog, QKeySequence, QPixmap, QWidget, qconnect
+from aqt.qt import QDialog, QInputDialog, QKeySequence, QPixmap, QWidget, qconnect
 from aqt.utils import showWarning
 
 from ..consts import consts
@@ -209,7 +210,7 @@ class WiktionaryFetcherDialog(Dialog):
         self,
         dictionary_name: str,
         word_field: str,
-        field_tuples: tuple[tuple[int, Callable[[WiktionaryFetcher, str], str]], ...],
+        field_tuples: tuple[tuple[int, Callable[[WiktionaryFetcher, str, int], str]], ...],
     ) -> None:
         want_cancel = False
         last_progress = 0.0
@@ -232,10 +233,13 @@ class WiktionaryFetcherDialog(Dialog):
                     continue
                 need_updating = False
                 try:
+                    index = self._choose_entry(fetcher, word)
+                    if index is None:
+                        continue
                     for field_tuple in field_tuples:
                         if not field_tuple[0]:
                             continue
-                        contents = field_tuple[1](fetcher, word)
+                        contents = field_tuple[1](fetcher, word, index)
                         note[self.field_names[field_tuple[0]]] = contents
                         need_updating = True
                 except WordNotFoundError as exc:
@@ -250,8 +254,45 @@ class WiktionaryFetcherDialog(Dialog):
                     break
         self.mw.taskman.run_on_main(self.mw.progress.finish)
 
-    def _get_definitions(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        defs = fetcher.get_senses(word)
+    def _choose_entry(self, fetcher: WiktionaryFetcher, word: str) -> int | None:
+        """Ask the user which entry to use if the word has several. Returns None to skip the note."""
+        entries = fetcher.get_entries(word)
+        if len(entries) == 1 or not self.config.get("choose_entry", True):
+            return 0
+        labels = [f"{i + 1}. {fetcher.describe_entry(entry)}" for i, entry in enumerate(entries)]
+        result: list[int | None] = [None]
+        done = threading.Event()
+
+        def ask() -> None:
+            # The progress window is modal and would block the prompt, so close it while asking
+            self.mw.progress.finish()
+            try:
+                choice, ok = QInputDialog.getItem(
+                    self,
+                    consts.name,
+                    f'Multiple entries were found for "{word}". Choose one:',
+                    labels,
+                    0,
+                    False,
+                )
+                if ok:
+                    result[0] = labels.index(choice)
+            finally:
+                self.mw.progress.start(
+                    max=len(self.notes),
+                    label=PROGRESS_LABEL.format(count=len(self.updated_notes), total=len(self.notes)),
+                    parent=self,
+                    immediate=True,
+                )
+                self.mw.progress.set_title(consts.name)
+                done.set()
+
+        self.mw.taskman.run_on_main(ask)
+        done.wait()
+        return result[0]
+
+    def _get_definitions(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        defs = fetcher.get_senses(word, index)
         if len(defs) == 0:
             return ""
         if len(defs) == 1:
@@ -261,8 +302,8 @@ class WiktionaryFetcherDialog(Dialog):
         formatted += "</ul>"
         return formatted
 
-    def _get_examples(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        examples = fetcher.get_examples(word)
+    def _get_examples(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        examples = fetcher.get_examples(word, index)
         if len(examples) == 0:
             return ""
         if len(examples) == 1:
@@ -272,17 +313,17 @@ class WiktionaryFetcherDialog(Dialog):
         formatted += "</ul>"
         return formatted
 
-    def _get_gender(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        return fetcher.get_gender(word)
+    def _get_gender(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        return fetcher.get_gender(word, index)
 
-    def _get_part_of_speech(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        return fetcher.get_part_of_speech(word)
+    def _get_part_of_speech(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        return fetcher.get_part_of_speech(word, index)
 
-    def _get_ipa(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        return fetcher.get_ipa(word)
+    def _get_ipa(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        return fetcher.get_ipa(word, index)
 
-    def _get_audio(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        url = fetcher.get_audio_url(word)
+    def _get_audio(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        url = fetcher.get_audio_url(word, index)
 
         http_session = requests.Session()
         # https://meta.wikimedia.org/wiki/User-Agent_policy
@@ -298,11 +339,11 @@ class WiktionaryFetcherDialog(Dialog):
         filename = self.mw.col.media.write_data(unquote(os.path.basename(url)), data)
         return "[sound:" + filename + "]"
 
-    def _get_etymology(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        return fetcher.get_etymology(word)
+    def _get_etymology(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        return fetcher.get_etymology(word, index)
 
-    def _get_declension(self, fetcher: WiktionaryFetcher, word: str) -> str:
-        declensions = fetcher.get_declension(word)
+    def _get_declension(self, fetcher: WiktionaryFetcher, word: str, index: int = 0) -> str:
+        declensions = fetcher.get_declension(word, index)
         if len(declensions) == 0:
             return ""
         formatted = "<ul>"

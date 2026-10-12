@@ -124,19 +124,38 @@ class WiktionaryFetcher:
             fetcher._connection.commit()
         shutil.rmtree(dictionary_dir)
 
-    def get_word_json(self, word: str) -> dict:
-        # TODO: handle words with multiple word senses
-        row = self._connection.execute("SELECT data FROM words WHERE word = ?", (word,)).fetchone()
-        if not row:
+    def get_entries(self, word: str) -> list[dict]:
+        """Return all dictionary entries for a word (e.g. one per part of speech or etymology)."""
+        rows = self._connection.execute("SELECT data FROM words WHERE word = ? ORDER BY rowid", (word,)).fetchall()
+        if not rows:
             raise WordNotFoundError(word)
-        return json.loads(row[0])
+        return [json.loads(row[0]) for row in rows]
 
-    def get_senses(self, word: str) -> list[str]:
-        data = self.get_word_json(word)
+    def get_word_json(self, word: str, index: int = 0) -> dict:
+        entries = self.get_entries(word)
+        return entries[min(index, len(entries) - 1)]
+
+    @staticmethod
+    def describe_entry(entry: dict, max_length: int = 80) -> str:
+        """Return a short label to tell entries of the same word apart."""
+        pos = entry.get("pos") or "?"
+        gloss = ""
+        for sense in entry.get("senses", []):
+            glosses = sense.get("raw_glosses") or sense.get("glosses")
+            if glosses:
+                gloss = glosses[-1]
+                break
+        label = f"{pos}: {gloss}" if gloss else pos
+        if len(label) > max_length:
+            label = label[: max_length - 1] + "…"
+        return label
+
+    def get_senses(self, word: str, index: int = 0) -> list[str]:
+        data = self.get_word_json(word, index)
         return ["\n".join(d.get("raw_glosses", d.get("glosses", []))) for d in data.get("senses", [])]
 
-    def get_examples(self, word: str) -> list[str]:
-        data = self.get_word_json(word)
+    def get_examples(self, word: str, index: int = 0) -> list[str]:
+        data = self.get_word_json(word, index)
         examples = []
         for sense in data.get("senses", []):
             for example in sense.get("examples", []):
@@ -146,9 +165,9 @@ class WiktionaryFetcher:
                 examples.append(sent)
         return examples
 
-    def get_gender(self, word: str) -> str:
+    def get_gender(self, word: str, index: int = 0) -> str:
         genders = {"feminine", "masculine", "neuter", "common-gender"}
-        data = self.get_word_json(word)
+        data = self.get_word_json(word, index)
         # forms = data.get("senses", []) + data.get("forms", [])
         senses = data.get("senses", [])
         # FIXME: do we need to return the form too along with the gender?
@@ -168,35 +187,35 @@ class WiktionaryFetcher:
 
         return ""
 
-    def get_part_of_speech(self, word: str) -> str:
-        data = self.get_word_json(word)
+    def get_part_of_speech(self, word: str, index: int = 0) -> str:
+        data = self.get_word_json(word, index)
         return data.get("pos") or ""
 
-    def get_ipa(self, word: str) -> str:
-        data = self.get_word_json(word)
+    def get_ipa(self, word: str, index: int = 0) -> str:
+        data = self.get_word_json(word, index)
         sounds = data.get("sounds", [])
         for sound in sounds:
             if sound.get("ipa"):
                 return sound["ipa"]
         return ""
 
-    def get_audio_url(self, word: str) -> str:
-        data = self.get_word_json(word)
+    def get_audio_url(self, word: str, index: int = 0) -> str:
+        data = self.get_word_json(word, index)
         sounds = data.get("sounds", [])
         for sound in sounds:
             if sound.get("ogg_url"):
                 return sound["ogg_url"]
         return ""
 
-    def get_etymology(self, word: str) -> str:
-        data = self.get_word_json(word)
+    def get_etymology(self, word: str, index: int = 0) -> str:
+        data = self.get_word_json(word, index)
         return data.get("etymology_text") or ""
 
     # "declension": forms in the declension table
-    def get_declension(self, word: str) -> dict[str, list[str]]:
+    def get_declension(self, word: str, index: int = 0) -> dict[str, list[str]]:
         declensions: dict[str, list[str]] = {}
 
-        data = self.get_word_json(word)
+        data = self.get_word_json(word, index)
         forms = data.get("forms", [])
 
         for form in forms:
