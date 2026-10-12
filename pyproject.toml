@@ -29,6 +29,7 @@ ankiutils = { git = "https://github.com/abdnh/ankiutils", branch = "master" }
 dev = [
     "ankiscripts[forms,template]",
     "aqt[qt]",
+    "grpcio-tools>=1.76,<1.77",
     "mypy>=1.15.0",
     "prek>=0.2.30",
     "pytest>=8.3.5",

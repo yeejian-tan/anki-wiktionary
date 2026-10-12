@@ -4,6 +4,10 @@ set windows-shell := ["pwsh", "-c"]
 
 UV_RUN := "uv run --"
 
+# Prefer scripts/protoc (from grpcio-tools) over the system protoc, whose version may not match the vendored protobuf
+PATH_SEP := if os_family() == "windows" { ";" } else { ":" }
+export PATH := justfile_directory() / "scripts" + PATH_SEP + env("PATH")
+
 # Package add-on for AnkiWeb
 ankiweb args='':
 	{{UV_RUN}} python -m ankiscripts.build --type ankiweb --qt all --exclude user_files/**/* {{args}}

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Use the protoc bundled with grpcio-tools so generated code matches the vendored protobuf runtime
+exec python -m grpc_tools.protoc "$@"

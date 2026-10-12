@@ -104,15 +104,21 @@ class WiktionaryFetcherDialog(Dialog):
         "declension_field",
     )
 
+    def _notetype_mapping(self) -> dict[str, str]:
+        """Return the cached mapping for the notetype of the selected notes, falling back to the last used settings."""
+        cached = self.config.get("mappings", {}).get(str(self.notes[0].mid))
+        return cached if cached is not None else self.config
+
     def set_last_used_settings(self) -> None:
-        dictionary = self.config["dictionary_field"].lower()
+        mapping = self._notetype_mapping()
+        dictionary = mapping["dictionary_field"].lower()
         for i in range(self.form.dictionaryComboBox.count()):
             text = self.form.dictionaryComboBox.itemText(i)
             if text.lower() == dictionary:
                 self.form.dictionaryComboBox.setCurrentIndex(i)
                 break
         for i, field_opt in enumerate(self.CONFIG_MODEL_FIELDS):
-            field_name = self.config[field_opt].lower()
+            field_name = mapping.get(field_opt, "").lower()
             combo = self.combos[i]
             for j in range(combo.count()):
                 text = combo.itemText(j)
@@ -121,9 +127,12 @@ class WiktionaryFetcherDialog(Dialog):
                     break
 
     def save_settings(self) -> None:
-        self.config["dictionary_field"] = self.form.dictionaryComboBox.currentText()
+        mapping = {"dictionary_field": self.form.dictionaryComboBox.currentText()}
         for i, field_opt in enumerate(self.CONFIG_MODEL_FIELDS):
-            self.config[field_opt] = self.combos[i].currentText()
+            mapping[field_opt] = self.combos[i].currentText()
+        # Last used settings serve as the default for notetypes without a cached mapping
+        self.config.update(mapping)
+        self.config.setdefault("mappings", {})[str(self.notes[0].mid)] = mapping
         self.mw.addonManager.writeConfig(__name__, self.config)
 
     def on_finished(self, result: int) -> None:

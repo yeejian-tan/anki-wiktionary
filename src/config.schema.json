@@ -8,6 +8,9 @@
         }
     },
     "properties": {
+        "mappings": {
+            "type": "object"
+        },
         "report_errors": {
             "type": "boolean"
         }

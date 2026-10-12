@@ -9,6 +9,7 @@
     "example_field": "",
     "gender_field": "",
     "ipa_field": "",
+    "mappings": {},
     "part_of_speech_field": "",
     "report_errors": true,
     "word_field": ""

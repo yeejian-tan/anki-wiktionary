@@ -2,3 +2,4 @@
 - `browser_shortcut`: Browser shortcut to open the add-on's dialog.
 - `report_errors`: Report add-on errors automatically.
 - The other options ending with \*\_field are used to save your configured fields.
+- `mappings`: Field mappings cached per notetype (keyed by notetype ID).
